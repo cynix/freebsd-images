@@ -12,7 +12,7 @@ fixup() {
     t=$(mktemp)
     cat > $t <<EOF
 FreeBSD: {
-  url: "pkg+http://pkg.FreeBSD.org/\${ABI}/latest",
+  url: "pkg+https://pkg.FreeBSD.org/\${ABI}/latest",
 }
 EOF
     mv $t $m/usr/local/etc/pkg/repos/FreeBSD.conf

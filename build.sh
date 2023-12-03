@@ -46,7 +46,7 @@ done
 shift $((OPTIND-1))
 
 # Packages for these branches are available on pkg.freebsd.org
-builds="main:15 stable/14:14 releng/14.1:14.1"
+builds="releng/14.1:14.1"
 
 # FreeBSD-13 builds are supported on my home lab infrastructure - hopefully
 # these will also be added to pkg.freebsd.org soon.
