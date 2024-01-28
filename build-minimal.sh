@@ -17,6 +17,12 @@ FreeBSD: {
 EOF
     mv $t $m/usr/local/etc/pkg/repos/FreeBSD.conf
 
+    if [ -x "/usr/local/bin/qemu-${arch}-static" ]; then
+		echo "Copying qemu-${arch}-static"
+		mkdir -p $m/usr/local/bin/
+		cp "/usr/local/bin/qemu-${arch}-static" $m/usr/local/bin/
+    fi
+
     echo Bootstrap package management
     # bootstrap before installing the config for FreeBSD-base, otherwise
     # it will attempt to install pkg from FreeBSD-base instead of FreeBSD.
