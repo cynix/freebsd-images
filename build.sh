@@ -10,7 +10,7 @@ build() {
     local branch=$(echo $spec | cut -d: -f1)
     local ver=$(echo $spec | cut -d: -f2)
 
-    for image in mtree static base minimal small; do
+    for image in mtree static base minimal small dev; do
 	./build-${image}.sh -A "${ARCHES}" -b ${branch} ${ver} || exit 1
     done
 }
@@ -20,7 +20,7 @@ push() {
     local branch=$(echo $spec | cut -d: -f1)
     local ver=$(echo $spec | cut -d: -f2)
 
-    for image in mtree static base minimal small; do
+    for image in mtree static base minimal small dev; do
 	./build-${image}.sh -A "${ARCHES}" -p ${branch} ${ver} || exit 1
     done
 }
