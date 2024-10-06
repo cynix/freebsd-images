@@ -334,15 +334,18 @@ build_image() {
 push_image() {
     local name=$1; shift
     local img=freebsd${VER}-${name}
-    local tag=$(podman image inspect localhost/${img}:latest \
-	      | jq --raw-output '.[0].Annotations["org.freebsd.version"]')
+    local short_tag=${VER}-${name}
+    local long_tag=$(podman image inspect localhost/${img}:latest \
+	      | jq --raw-output '.[0].Annotations["org.freebsd.version"]')-${name}
 
-    echo "Pushing ${REG}/${img}:${tag}"
-    buildah manifest push --quiet --all localhost/${img}:latest docker://${REG}/${img}:latest
-    buildah manifest push --quiet --all localhost/${img}:latest docker://${REG}/${img}:${tag}
+    echo "Pushing ${img} -> ${REG}/freebsd:${short_tag}"
+    buildah manifest push --quiet --all localhost/${img}:latest docker://${REG}/freebsd:${name}
+    buildah manifest push --quiet --all localhost/${img}:latest docker://${REG}/freebsd:${short_tag}
+    buildah manifest push --quiet --all localhost/${img}:latest docker://${REG}/freebsd:${long_tag}
     if buildah manifest exists localhost/${img}:latest-debug; then
-	echo "Pushing ${REG}/${img}:${tag}-debug"
-	buildah manifest push --quiet --all localhost/${img}:latest-debug docker://${REG}/${img}:latest-debug
-	buildah manifest push --quiet --all localhost/${img}:latest-debug docker://${REG}/${img}:${tag}-debug
+	echo "Pushing ${img} -> ${REG}/freebsd:${short_tag}-debug"
+	buildah manifest push --quiet --all localhost/${img}:latest-debug docker://${REG}/freebsd:${name}-debug
+	buildah manifest push --quiet --all localhost/${img}:latest-debug docker://${REG}/freebsd:${short_tag}-debug
+	buildah manifest push --quiet --all localhost/${img}:latest-debug docker://${REG}/freebsd:${long_tag}-debug
     fi
 }
