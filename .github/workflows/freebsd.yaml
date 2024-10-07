@@ -1,0 +1,35 @@
+name: FreeBSD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          sync: sshfs
+
+          prepare: |
+            sysctl net.inet.ip.forwarding=1
+
+            mkdir -p /usr/local/etc/pkg/repos
+            echo 'FreeBSD: { url: "pkg+https://pkg.freebsd.org/${ABI}/latest" }' > /usr/local/etc/pkg/repos/FreeBSD.conf
+            pkg install -y jq podman-suite qemu-user-static
+            service qemu_user_static onestart
+
+            sed -i '' -e 's/zfs/vfs/g' /usr/local/etc/containers/storage.conf
+            mkdir -p /var/db/containers/storage
+            podman login -u ${{ github.actor }} -p ${{ github.token }} ghcr.io
+
+          run: |
+            env REG=ghcr.io/${{ github.repository_owner }} ./build.sh -b ${{ github.ref == 'refs/heads/main' && '-p' || '' }}

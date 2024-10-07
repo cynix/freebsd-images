@@ -26,7 +26,7 @@ EOF
     echo Bootstrap package management
     # bootstrap before installing the config for FreeBSD-base, otherwise
     # it will attempt to install pkg from FreeBSD-base instead of FreeBSD.
-    buildah run $c pkg -y bootstrap
+    buildah run --network=host $c pkg -y bootstrap
     rm $m/usr/local/sbin/pkg-static.pkgsave
     strip $m/usr/local/sbin/pkg-static
 
