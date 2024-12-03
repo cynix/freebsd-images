@@ -1,18 +1,19 @@
 name: FreeBSD
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      release:
+        type: string
+        required: true
+      latest:
+        type: boolean
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Build
         uses: vmactions/freebsd-vm@v1
         with:
@@ -20,16 +21,78 @@ jobs:
           sync: sshfs
 
           prepare: |
+            set -ex
+
             sysctl net.inet.ip.forwarding=1
 
             mkdir -p /usr/local/etc/pkg/repos
             echo 'FreeBSD: { url: "pkg+https://pkg.freebsd.org/${ABI}/latest" }' > /usr/local/etc/pkg/repos/FreeBSD.conf
-            pkg install -y jq podman-suite qemu-user-static
-            service qemu_user_static onestart
+            pkg install -y podman-suite
 
             sed -i '' -e 's/zfs/vfs/g' /usr/local/etc/containers/storage.conf
             mkdir -p /var/db/containers/storage
             podman login -u ${{ github.actor }} -p ${{ github.token }} ghcr.io
 
           run: |
-            env REG=ghcr.io/${{ github.repository_owner }} ./build.sh -b ${{ github.ref == 'refs/heads/main' && '-p' || '' }}
+            set -ex
+
+            release=${{ inputs.release }}
+            version=''
+
+            mkdir cache repos
+            export IGNORE_OSVERSION=yes
+            export PKG_CACHEDIR=$(pwd)/cache
+
+            cat > repos/FreeBSD-base.conf <<-EOF
+              FreeBSD-base: {
+                url: "pkg+https://pkg.freebsd.org/\${ABI}/base_release_${release#*.}",
+                mirror_type: "srv",
+                signature_type: "fingerprints",
+                fingerprints: "/usr/share/keys/pkg",
+                enabled: yes
+              }
+            EOF
+            cat repos/FreeBSD-base.conf
+
+            for img in minimal dynamic static; do
+              manifest=freebsd:${{ inputs.release }}-$img
+              podman manifest create $manifest
+
+              for arch in amd64 arm64-aarch64; do
+                base=$(fetch -o- https://download.freebsd.org/releases/OCI-IMAGES/${{ inputs.release }}-RELEASE/${arch#*-}/Latest/FreeBSD-${{ inputs.release }}-RELEASE-$arch-container-image-$img.txz | xzcat - | podman image load)
+                base=${base##* }
+                podman image inspect $base
+
+                c=$(buildah from $base)
+                m=$(buildah mount $c)
+
+                env ABI=FreeBSD:${release%.*}:${arch#*-} pkg --rootdir $m --repo-conf-dir $(pwd)/repos upgrade -y
+
+                if [ -z "$version" ]; then
+                  version=$(env ABI=FreeBSD:${release%.*}:${arch#*-} pkg --rootdir $m query '%v' FreeBSD-runtime)
+                fi
+
+                rm -rf $m/var/db/pkg/repos
+
+                buildah unmount $c
+                buildah config --arch=${arch%-*} $c
+                buildah commit --manifest=$manifest --rm $c
+              done
+
+              podman manifest inspect $manifest
+
+              if [ '${{ github.ref }}' = 'refs/heads/main' ]; then
+                podman manifest push $manifest ghcr.io/${{ github.repository_owner }}/$manifest
+
+                if [ "$version" != "$release" ]; then
+                  podman manifest push $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$version-$img
+                fi
+
+                if [ '${{ inputs.latest }}' = 'true' ]; then
+                  podman manifest push $manifest ghcr.io/${{ github.repository_owner }}/freebsd:${release%.*}-$img
+                  podman manifest push $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$img
+                fi
+              fi
+
+              podman manifest rm $manifest
+            done
