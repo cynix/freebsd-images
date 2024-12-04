@@ -29,9 +29,11 @@ jobs:
             echo 'FreeBSD: { url: "pkg+https://pkg.freebsd.org/${ABI}/latest" }' > /usr/local/etc/pkg/repos/FreeBSD.conf
             pkg install -y podman-suite
 
-            sed -i '' -e 's/zfs/vfs/g' /usr/local/etc/containers/storage.conf
+            truncate -s 32G /var/tmp/z
             mkdir -p /var/db/containers/storage
-            podman login -u ${{ github.actor }} -p ${{ github.token }} ghcr.io
+            zpool create -R /var/db/containers/storage -O mountpoint=/ -O compression=lz4 z /var/tmp/z
+
+            buildah login -u ${{ github.actor }} -p ${{ github.token }} ghcr.io
 
           run: |
             set -ex
@@ -66,31 +68,33 @@ jobs:
                 c=$(buildah from $base)
                 m=$(buildah mount $c)
 
-                env ABI=FreeBSD:${release%.*}:${arch#*-} pkg --rootdir $m --repo-conf-dir $(pwd)/repos upgrade -y
+                abi=FreeBSD:${release%.*}:${arch#*-}
+
+                env ABI=$abi pkg --rootdir $m --repo-conf-dir $(pwd)/repos upgrade -y
 
                 if [ -z "$version" ]; then
-                  version=$(env ABI=FreeBSD:${release%.*}:${arch#*-} pkg --rootdir $m query '%v' FreeBSD-runtime)
+                  version=$(env ABI=$abi pkg --rootdir $m query '%v' FreeBSD-runtime)
                 fi
 
                 rm -rf $m/var/db/pkg/repos
 
                 buildah unmount $c
-                buildah config --arch=${arch%-*} $c
+                buildah config --arch=${arch%-*} --annotation=org.freebsd.version=$version $c
                 buildah commit --manifest=$manifest --rm $c
               done
 
               podman manifest inspect $manifest
 
               if [ '${{ github.ref }}' = 'refs/heads/main' ]; then
-                podman manifest push $manifest ghcr.io/${{ github.repository_owner }}/$manifest
+                podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/$manifest
 
                 if [ "$version" != "$release" ]; then
-                  podman manifest push $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$version-$img
+                  podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$version-$img
                 fi
 
                 if [ '${{ inputs.latest }}' = 'true' ]; then
-                  podman manifest push $manifest ghcr.io/${{ github.repository_owner }}/freebsd:${release%.*}-$img
-                  podman manifest push $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$img
+                  podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:${release%.*}-$img
+                  podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$img
                 fi
               fi
 
