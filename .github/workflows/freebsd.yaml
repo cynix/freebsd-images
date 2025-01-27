@@ -8,10 +8,14 @@ on:
         required: true
       tags:
         type: choice
+        required: true
         options:
           - version
           - major
           - latest
+
+permissions:
+  packages: write
 
 jobs:
   build:
