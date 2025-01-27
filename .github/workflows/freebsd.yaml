@@ -6,9 +6,12 @@ on:
       release:
         type: string
         required: true
-      latest:
-        type: boolean
-        required: true
+      tags:
+        type: choice
+        options:
+          - version
+          - major
+          - latest
 
 jobs:
   build:
@@ -92,8 +95,11 @@ jobs:
                   podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$version-$img
                 fi
 
-                if [ '${{ inputs.latest }}' = 'true' ]; then
+                if [ '${{ inputs.tags }}' = 'major' -o '${{ inputs.tags }}' = 'latest' ]; then
                   podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:${release%.*}-$img
+                fi
+
+                if [ '${{ inputs.tags }}' = 'latest' ]; then
                   podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$img
                 fi
               fi
