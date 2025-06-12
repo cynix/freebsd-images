@@ -63,16 +63,12 @@ jobs:
             EOF
             cat repos/FreeBSD-base.conf
 
-            for img in minimal dynamic static; do
+            for img in runtime dynamic static; do
               manifest=freebsd:${{ inputs.release }}-$img
               podman manifest create $manifest
 
               for arch in amd64 arm64-aarch64; do
-                base=$(fetch -o- https://download.freebsd.org/releases/OCI-IMAGES/${{ inputs.release }}-RELEASE/${arch#*-}/Latest/FreeBSD-${{ inputs.release }}-RELEASE-$arch-container-image-$img.txz | xzcat - | podman image load)
-                base=${base##* }
-                podman image inspect $base
-
-                c=$(buildah from $base)
+                c=$(buildah from --pull=always --arch=${arch%-*} docker://ghcr.io/freebsd/freebsd-$img:$release)
                 m=$(buildah mount $c)
 
                 abi=FreeBSD:${release%.*}:${arch#*-}
