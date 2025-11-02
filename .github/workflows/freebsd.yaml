@@ -21,88 +21,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup FreeBSD VM
+        uses: cynix/freebsd-firecracker-action@v0.6.0-containers
+
       - name: Build
-        uses: vmactions/freebsd-vm@v1
-        with:
-          usesh: true
-          sync: sshfs
-
-          prepare: |
-            set -ex
-
-            sysctl net.inet.ip.forwarding=1
-
-            mkdir -p /usr/local/etc/pkg/repos
-            echo 'FreeBSD: { url: "pkg+https://pkg.freebsd.org/${ABI}/latest" }' > /usr/local/etc/pkg/repos/FreeBSD.conf
-            pkg install -y podman-suite
-
-            truncate -s 32G /var/tmp/z
-            mkdir -p /var/db/containers/storage
-            zpool create -R /var/db/containers/storage -O mountpoint=/ -O compression=lz4 z /var/tmp/z
-
-            buildah login -u ${{ github.actor }} -p ${{ github.token }} ghcr.io
-
-          run: |
-            set -ex
-
-            release=${{ inputs.release }}
-            version=''
-
-            mkdir cache repos
-            export IGNORE_OSVERSION=yes
-            export PKG_CACHEDIR=$(pwd)/cache
-
-            cat > repos/FreeBSD-base.conf <<-EOF
-              FreeBSD-base: {
-                url: "pkg+https://pkg.freebsd.org/\${ABI}/base_release_${release#*.}",
-                mirror_type: "srv",
-                signature_type: "fingerprints",
-                fingerprints: "/usr/share/keys/pkg",
-                enabled: yes
-              }
-            EOF
-            cat repos/FreeBSD-base.conf
-
-            for img in runtime dynamic static; do
-              manifest=freebsd:${{ inputs.release }}-$img
-              podman manifest create $manifest
-
-              for arch in amd64 arm64-aarch64; do
-                c=$(buildah from --pull=always --arch=${arch%-*} docker://ghcr.io/freebsd/freebsd-$img:$release)
-                m=$(buildah mount $c)
-
-                abi=FreeBSD:${release%.*}:${arch#*-}
-
-                env ABI=$abi pkg --rootdir $m --repo-conf-dir $(pwd)/repos upgrade -y
-
-                if [ -z "$version" ]; then
-                  version=$(env ABI=$abi pkg --rootdir $m query '%v' FreeBSD-runtime)
-                fi
-
-                rm -rf $m/var/db/pkg/repos
-
-                buildah unmount $c
-                buildah config --arch=${arch%-*} --annotation=org.freebsd.version=$version $c
-                buildah commit --manifest=$manifest --rm $c
-              done
-
-              podman manifest inspect $manifest
-
-              if [ '${{ github.ref }}' = 'refs/heads/main' ]; then
-                podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/$manifest
-
-                if [ "$version" != "$release" ]; then
-                  podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$version-$img
-                fi
-
-                if [ '${{ inputs.tags }}' = 'major' -o '${{ inputs.tags }}' = 'latest' ]; then
-                  podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:${release%.*}-$img
-                fi
-
-                if [ '${{ inputs.tags }}' = 'latest' ]; then
-                  podman manifest push --all $manifest ghcr.io/${{ github.repository_owner }}/freebsd:$img
-                fi
-              fi
-
-              podman manifest rm $manifest
-            done
+        shell: bash
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_TOKEN: ${{ github.token }}
+          INPUT_RELEASE: ${{ inputs.release }}
+          INPUT_TAGS: ${{ inputs.tags }}
+        run: |
+          scp build.sh firecracker:
+          ssh firecracker env \
+            GITHUB_ACTOR="'$GITHUB_ACTOR'" \
+            GITHUB_REPOSITORY_OWNER="'$GITHUB_REPOSITORY_OWNER'" \
+            GITHUB_REF="'$GITHUB_REF'" \
+            GITHUB_TOKEN="'$GITHUB_TOKEN'" \
+            INPUT_RELEASE="'$INPUT_RELEASE'" \
+            INPUT_TAGS="'$INPUT_TAGS'" \
+            ./build.sh
