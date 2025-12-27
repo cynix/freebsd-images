@@ -5,21 +5,14 @@ sysctl net.inet.ip.forwarding=1
 
 mkdir -p /usr/local/etc/pkg/repos
 cat > /usr/local/etc/pkg/repos/FreeBSD.conf <<'EOF'
-FreeBSD: {
+FreeBSD-ports: {
   url: "pkg+https://pkg.FreeBSD.org/${ABI}/latest"
 }
 FreeBSD-base: {
-  url: "pkg+https://pkg.FreeBSD.org/${ABI}/base_release_${VERSION_MINOR}",
-  mirror_type: "srv",
-  signature_type: "fingerprints",
-  fingerprints: "/usr/share/keys/pkg",
   enabled: yes
 }
-FreeBSD-kmods: {
-  enabled: no
-}
 EOF
-pkg install -y podman-suite
+pkg install -y FreeBSD-zfs podman-suite
 
 truncate -s 16G /var/tmp/z
 mkdir -p /var/db/containers/storage
@@ -33,7 +26,7 @@ mkdir cache repos
 export IGNORE_OSVERSION=yes
 export PKG_CACHEDIR=$(pwd)/cache
 
-for img in runtime dynamic static; do
+for img in toolchain notoolchain runtime dynamic static; do
   manifest=freebsd:$INPUT_RELEASE-$img
   podman manifest create $manifest
 
