@@ -1,6 +1,8 @@
 #!/bin/sh
 set -ex
 
+freebsd-version -ru
+
 sysctl net.inet.ip.forwarding=1
 
 mkdir -p /usr/local/etc/pkg/repos
@@ -12,6 +14,7 @@ FreeBSD-base: {
   enabled: yes
 }
 EOF
+
 pkg install -y FreeBSD-zfs podman-suite
 
 truncate -s 16G /var/tmp/z
@@ -26,7 +29,14 @@ mkdir cache repos
 export IGNORE_OSVERSION=yes
 export PKG_CACHEDIR=$(pwd)/cache
 
-for img in toolchain notoolchain runtime dynamic static; do
+imgs="runtime dynamic static"
+
+version_major="${INPUT_RELEASE%.*}"
+if [ "$version_major" -ge 15 ]; then
+  imgs="toolchain notoolchain $imgs"
+fi
+
+for img in $imgs; do
   manifest=freebsd:$INPUT_RELEASE-$img
   podman manifest create $manifest
 
@@ -35,6 +45,10 @@ for img in toolchain notoolchain runtime dynamic static; do
     m=$(buildah mount $c)
 
     abi=FreeBSD:${INPUT_RELEASE%.*}:${arch#*-}
+
+    if [ "$version_major" -lt 15 ]; then
+      ln -s pkg $m/usr/share/keys/pkgbase-$version_major
+    fi
 
     env ABI=$abi OSVERSION=${INPUT_RELEASE%.*}0${INPUT_RELEASE#*.}000 pkg --rootdir $m upgrade -y
 
@@ -59,7 +73,7 @@ for img in toolchain notoolchain runtime dynamic static; do
     fi
 
     if [ "$INPUT_TAGS" = 'major' -o "$INPUT_TAGS" = 'latest' ]; then
-      podman manifest push --all $manifest ghcr.io/"$GITHUB_REPOSITORY_OWNER"/freebsd:${INPUT_RELEASE%.*}-$img
+      podman manifest push --all $manifest ghcr.io/"$GITHUB_REPOSITORY_OWNER"/freebsd:$version_major-$img
     fi
 
     if [ "$INPUT_TAGS" = 'latest' ]; then
