@@ -44,6 +44,9 @@ for img in $imgs; do
     c=$(buildah from --pull=always --arch=${arch%-*} docker://ghcr.io/freebsd/freebsd-$img:$INPUT_RELEASE)
     m=$(buildah mount $c)
 
+    rm -f $m/usr/local/etc/pkg/repos/base.conf
+    cp /usr/local/etc/pkg/repos/FreeBSD.conf $m/usr/local/etc/pkg/repos/
+
     abi=FreeBSD:${INPUT_RELEASE%.*}:${arch#*-}
 
     if [ "$version_major" -lt 15 ]; then
