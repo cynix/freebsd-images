@@ -22,10 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Setup FreeBSD VM
-        uses: cynix/freebsd-firecracker@v0.8.1-containers
+        uses: cynix/freebsd-firecracker@v0.11.0-containers
 
       - name: Build
         shell: bash
